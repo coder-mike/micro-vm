@@ -3,7 +3,7 @@ import * as IL from './il';
 import { crc16ccitt } from 'crc';
 import { notImplemented, assertUnreachable, assert, notUndefined, unexpected, invalidOperation, entries, stringifyIdentifier, todo } from './utils';
 import * as _ from 'lodash';
-import { vm_Reference, vm_Value, vm_TeMetaType, vm_TeWellKnownValues, vm_TeTypeCode, vm_TeValueTag, vm_TeOpcode, vm_TeOpcodeEx1, UInt8, UInt4, isUInt12, isSInt14, isSInt32, isUInt16, isUInt4, isSInt8, vm_TeOpcodeEx2, isUInt8, SInt8, isSInt16, vm_TeOpcodeEx3, UInt16, SInt16, isUInt14, vm_TeOpcodeEx4, vm_TeSmallLiteralValue } from './runtime-types';
+import { vm_Reference, vm_Value, vm_TeMetaType, vm_TeWellKnownValues, vm_TeTypeCode, vm_TeValueTag, vm_TeOpcode, vm_TeOpcodeEx1, UInt8, UInt4, isUInt12, isSInt14, isSInt32, isUInt16, isUInt4, isSInt8, vm_TeOpcodeEx2, isUInt8, SInt8, isSInt16, vm_TeOpcodeEx3, UInt16, SInt16, isUInt14, vm_TeOpcodeEx4, vm_TeSmallLiteralValue, vm_TeBinOp2, vm_TeBinOp1 } from './runtime-types';
 import { stringifyFunction, stringifyVMValue, stringifyAllocation } from './stringify-il';
 import { BinaryRegion3, Future, FutureLike } from './binary-region-3';
 import { HTML } from './visual-buffer';
@@ -775,6 +775,29 @@ interface InstructionEmitContext {
   indexOfGlobalSlot: (id: VM.GlobalSlotID) => number;
 }
 
+const ilBinOpCodeToVm: Record<IL.BinOpCode, [vm_TeOpcode, vm_TeBinOp1 | vm_TeBinOp2]> = {
+  ['+']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_ADD],
+  ['-']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_SUBTRACT],
+  ['/']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_DIVIDE_FLOAT],
+  ['%']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_REMAINDER],
+  ['*']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_MULTIPLY],
+  ['**']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_POWER],
+  ['>>']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_SHR_BITWISE],
+  ['>>>']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_SHR_ARITHMETIC],
+  ['<<']: [vm_TeOpcode.VM_OP_BINOP_1, vm_TeBinOp1.VM_BOP1_SHL],
+
+  // Logical AND and OR are implemented via the BRANCH opcode
+  ['&']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_AND],
+  ['|']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_OR],
+  ['^']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_XOR],
+  ['<']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_LESS_THAN],
+  ['>']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_GREATER_THAN],
+  ['<=']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_LESS_EQUAL],
+  ['>=']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_GREATER_EQUAL],
+  ['===']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_EQUAL],
+  ['!==']: [vm_TeOpcode.VM_OP_BINOP_2, vm_TeBinOp2.VM_BOP2_NOT_EQUAL],
+}
+
 class InstructionEmitter {
   operationArrayGet() {
     return notImplemented();
@@ -788,8 +811,9 @@ class InstructionEmitter {
     return notImplemented();
   }
 
-  operationBinOp() {
-    return notImplemented();
+  operationBinOp(_ctx: InstructionEmitContext, _op: IL.OtherOperation, param: IL.BinOpCode) {
+    const [opcode1, opcode2] = ilBinOpCodeToVm[param];
+    return fixedSizeInstruction(1, r => writeOpcode(r, opcode1, opcode2));
   }
 
   operationBranch() {
