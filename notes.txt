@@ -1,0 +1,18 @@
+Why is the Call operation special?
+
+What is the short call stack for?
+3 diff types of CALL:
+* CALL_1: Uses the short call table (1 byte)
+* CALL_2: Embed fn ptr into call instruction (at least 4 bytes)
+* CALL_3: (Completely dynamic) Expects fn to be in the stack (at least 5 bytes)
+  * Push fn ptr into stack (1 byte for push opcode, 2 bytes for ptr: 3 bytes)
+  * Pushes args into the stack (N bytes)
+  * Calls the call operation (2 bytes)
+
+Static analysis:
+Up to 16 call sites in the code will be flagged as short calls. The bytecode emitter will, put short calls into the code and fill in the table the details
+Which call sites have a known function, number of arguments doesn't change within calls and which of those are the most frequently called
+(A function called with different argument counts can be multiple entries in the table)
+
+"vm_Te": What does TE mean?
+Type enumeration
