@@ -3,7 +3,7 @@ import * as IL from './il';
 import { crc16ccitt } from 'crc';
 import { notImplemented, assertUnreachable, assert, notUndefined, unexpected, invalidOperation, entries, stringifyIdentifier, todo } from './utils';
 import * as _ from 'lodash';
-import { vm_Reference, vm_Value, vm_TeMetaType, vm_TeWellKnownValues, vm_TeTypeCode, vm_TeValueTag, vm_TeOpcode, vm_TeOpcodeEx1, UInt8, UInt4, isUInt12, isSInt14, isSInt32, isUInt16, isUInt4, isSInt8, vm_TeOpcodeEx2, isUInt8, SInt8, isSInt16, vm_TeOpcodeEx3, UInt16, SInt16, isUInt14, vm_TeOpcodeEx4 } from './runtime-types';
+import { vm_Reference, vm_Value, vm_TeMetaType, vm_TeWellKnownValues, vm_TeTypeCode, vm_TeValueTag, vm_TeOpcode, vm_TeOpcodeEx1, UInt8, UInt4, isUInt12, isSInt14, isSInt32, isUInt16, isUInt4, isSInt8, vm_TeOpcodeEx2, isUInt8, SInt8, isSInt16, vm_TeOpcodeEx3, UInt16, SInt16, isUInt14, vm_TeOpcodeEx4, vm_TeSmallLiteralValue } from './runtime-types';
 import { stringifyFunction, stringifyVMValue, stringifyAllocation } from './stringify-il';
 import { BinaryRegion3, Future, FutureLike } from './binary-region-3';
 import { HTML } from './visual-buffer';
@@ -868,8 +868,8 @@ class InstructionEmitter {
     }
   }
 
-  operationLiteral() {
-    return notImplemented();
+  operationLiteral(_ctx: InstructionEmitContext, _op: IL.Operation, param: IL.Value) {
+    return opcodeLiteral(param);
   }
 
   operationLoadArg(_ctx: InstructionEmitContext, _op: IL.Operation, index: number) {
@@ -1002,6 +1002,47 @@ function writeOpcodeEx3Signed(region: BinaryRegion3, opcode: vm_TeOpcodeEx3, par
   assert(isSInt16(param));
   writeOpcode(region, vm_TeOpcode.VM_OP_EXTENDED_3, opcode);
   region.writeUInt16LE(param);
+}
+
+function writeOpcodeEx3Str(region: BinaryRegion3, opcode: vm_TeOpcodeEx3, param: string) {
+  assert(isUInt4(opcode));
+  writeOpcode(region, vm_TeOpcode.VM_OP_EXTENDED_3, opcode);
+  region.writeStringUtf8NT(param);
+}
+
+function opcodeLiteral(param: IL.Value): InstructionWriter {
+  if (param.type === 'NumberValue') {
+    assert(isSInt16(param.value));
+    
+    if (param.value === -1) return opcode(vm_TeOpcode.VM_OP_LOAD_SMALL_LITERAL, vm_TeSmallLiteralValue.VM_SLV_INT_MINUS_1);
+    if (param.value === 0) return opcode(vm_TeOpcode.VM_OP_LOAD_SMALL_LITERAL, vm_TeSmallLiteralValue.VM_SLV_INT_0);
+    if (param.value === 1) return opcode(vm_TeOpcode.VM_OP_LOAD_SMALL_LITERAL, vm_TeSmallLiteralValue.VM_SLV_INT_1);
+    if (param.value === 2) return opcode(vm_TeOpcode.VM_OP_LOAD_SMALL_LITERAL, vm_TeSmallLiteralValue.VM_SLV_INT_2);
+    
+    // Else not a small number literal
+    return fixedSizeInstruction(3, r =>
+      writeOpcodeEx3Signed(r, vm_TeOpcodeEx3.VM_OP3_LOAD_LITERAL, param.value));
+  }
+
+  if (param.type === 'StringValue') {
+    return fixedSizeInstruction(3, r =>
+      writeOpcodeEx3Str(r, vm_TeOpcodeEx3.VM_OP3_LOAD_LITERAL, param.value));
+  }
+
+  let opcodeParam: UInt4;
+  switch (param.type) {
+    case 'BooleanValue': {
+      opcodeParam = param.value
+        ? vm_TeSmallLiteralValue.VM_SLV_TRUE
+        : vm_TeSmallLiteralValue.VM_SLV_FALSE;
+      break;
+    }
+    case 'NullValue': opcodeParam = vm_TeSmallLiteralValue.VM_SLV_NULL; break;
+    case 'UndefinedValue': opcodeParam = vm_TeSmallLiteralValue.VM_SLV_UNDEFINED; break;
+    default: return unexpected();
+  }
+  return opcode(vm_TeOpcode.VM_OP_LOAD_SMALL_LITERAL, opcodeParam);
+
 }
 
 function fixedSizeInstruction(size: number, write: (region: BinaryRegion3) => void): InstructionWriter {
